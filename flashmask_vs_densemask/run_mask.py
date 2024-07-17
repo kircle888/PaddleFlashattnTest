@@ -214,5 +214,9 @@ if __name__ == "__main__":
     case = cases[args.case_id]
     if run_mode == "densemask":
         run_densemask(*case, log_file=args.log_file)
+        hash_file = args.log_file.replace(".log", ".hash")
+        data_file = args.log_file.replace(".log", ".npz")
+        os.system(f"md5sum {data_file} >>{hash_file}")
+
     elif run_mode == "flashmask":
         run_flashmask(*case, log_file=args.log_file)

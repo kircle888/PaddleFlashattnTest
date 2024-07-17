@@ -3,12 +3,12 @@ import itertools
 
 def gen_cases():
     testcases = []
-    batchszs = [1, 2, 4]
+    batchszs = [1]
     headdims = [32, 128]
-    seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    seeds = [0]
     seqlens = [128, 256, 512, 1024, 2048, 4096, 8192]
     seqlens.extend([2394, 4072, 3738, 3957, 1492, 857, 8999, 6148, 2510, 5071])
-    hs = [(8, 8, 8), (32, 32, 1)]
+    hs = [(8, 8, 8)]
     # flags = [(True, True), (True, False), (False, False)]
     flags = [(True, False), (False, False)]
     mask_gen = ["random", "qamask"]

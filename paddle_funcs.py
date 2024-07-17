@@ -68,7 +68,7 @@ def packqkv(q, k, v):
         bsz, sq, hq, hdim = q.shape
         bsz, sk, hk, hdim = k.shape
         ng = hq // hk
-        tq = q.reshape((0, 0, ng, nk, hdim))
+        tq = q.reshape((0, 0, ng, hk, hdim))
         kv = paddle.stack([k, v], axis=2)
         qkv = paddle.concat([tq, kv], axis=2)
         return qkv
@@ -90,11 +90,11 @@ def unpackqkv(qkv):
         q, k, v = paddle.split(
             qkv,
             num_or_sections=[
-                ng * hk,
+                (ng - 2) * hk,
                 hk,
                 hk,
             ],
-            axis=1,
+            axis=2,
         )
         return q, k, v
     elif len(qkv.shape) == 4:
@@ -103,7 +103,7 @@ def unpackqkv(qkv):
         q, k, v = paddle.split(
             qkv,
             num_or_sections=[
-                ng * hk,
+                (ng - 2) * hk,
                 hk,
                 hk,
             ],
@@ -252,12 +252,21 @@ def generate_startrows_padding(key_padding_mask):
     return start_rows
 
 
-def generate_startrows_unpad(h, cu_seqlen):
-    nnz = cu_seqlen[-1]
-    start_rows = paddle.zeros((1, h, nnz), dtype="int32")
-    for i in range(cu_seqlen.shape[0] - 1):
-        start_rows[:, :, cu_seqlen[i] : cu_seqlen[i + 1]] = cu_seqlen[i + 1]
-    return start_rows
+def varlen_to_startendrows(cu_seqlens, bsz, max_s, causal):
+    seqlens = paddle.diff(cu_seqlens).tolist()
+    assert len(seqlens) == bsz
+    if causal:
+        startend_rows = paddle.zeros((bsz, 1, max_s, 1), dtype="int32")
+        for i, seqlen in enumerate(seqlens):
+            startend_rows[i, 0, :seqlen, 0] = seqlen
+            startend_rows[i, 0, seqlen:, 0] = paddle.arange(0, max_s)[seqlen:]
+    else:
+        startend_rows = paddle.zeros((bsz, 1, max_s, 2), dtype="int32")
+        for i, seqlen in enumerate(seqlens):
+            startend_rows[i, 0, :seqlen, 0] = seqlen
+            startend_rows[i, 0, seqlen:, 0] = paddle.arange(0, max_s)[seqlen:]
+            startend_rows[i, 0, seqlen:, 1] = startend_rows[i, 0, seqlen:, 0]
+    return startend_rows
 
 
 def cuseqlen_to_startrows(cu_seqlen, max_s):
@@ -452,7 +461,7 @@ def gen_sparsemask_fromqalens(qalens, max_s, causal=True, has_end=False):
         ending_pos = np.random.randint(0, seqlen)
         start_rows[:, 1] = ending_pos
         start_rows[:, 1] = np.maximum(start_rows[:, 0], start_rows[:, 1])
-    return start_rows
+    return paddle.to_tensor(start_rows, dtype="int32")
 
 
 def gen_query_multians_dataset(bz, seqlen, splitnum, ansnum):
